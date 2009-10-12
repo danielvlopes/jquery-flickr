@@ -1,8 +1,7 @@
 /*****************************************
- * Flickr API (in jQuery)
- * version: 1.0 (02/23/2009)
+ * Original Flickr API (in jQuery) by Ryan Heath (http://rpheath.com)
+ * Changes by Daniel Lopes (09/10/2009)
  * written for jQuery 1.3.2
- * by Ryan Heath (http://rpheath.com)
  *****************************************/
 (function($) {
   // core extensions
@@ -45,10 +44,7 @@
   $.flickr.thumbnail = {
     src: function(photo, size) {
       if (size === undefined) size = $.flickr.translate($.flickr.settings.thumbnail_size)
-
-			var photo_name = (photo.primary===undefined) ? photo.id : photo.primary ;
-			
-      return 'http://farm' + photo.farm + '.static.flickr.com/' + photo.server + '/' + photo_name + '_' + photo.secret + size + '.jpg'
+      return 'http://farm' + photo.farm + '.static.flickr.com/' + photo.server + '/' + photo.id + '_' + photo.secret + size + '.jpg'
     },
     imageTag: function(image) {
       return '<img src="' + image.src + '" alt="' + image.alt + '" />'
@@ -58,13 +54,10 @@
   // accepts a series of photos and constructs
   // the thumbnails that link back to Flickr
   $.flickr.thumbnail.process = function(photos) {
-		var element = (photos.photo===undefined) ? photos.photoset : photos.photo ;
-	
-    var thumbnails = $.map(element, function(photo) {
+    var thumbnails = $.map(photos.photo, function(photo) {
       var image = new Image(), html = '', href = undefined
 
       image.src = $.flickr.thumbnail.src(photo)
-			photo.title = (photo.title._content===undefined) ? photo.title : photo.title._content
       image.alt = photo.title
 
       var size = $.flickr.settings.link_to_size
@@ -80,28 +73,36 @@
   }
 
   // handles requesting and thumbnailing photos
-  $.flickr.photos = function(method, options) {
-    var options = $.extend($.flickr.settings, options || {}),
-        elements = $.flickr.self, photos
+  $.flickr.photos = function(method, options, pagination) {
+    var options = $.extend($.flickr.settings, options || {})
+    var elements = $.flickr.self
+		var	photos, totalPages
 
-    return elements.each(function() {
+    elements.each(function() {
       $.getJSON($.flickr.url(method, options), function(data) {
-        photos = (data.photos === undefined ? data.photoset : data.photos)
-        elements.append($.flickr.thumbnail.process(photos))
-      })
-    })
+				if (data.stat != "fail"){
+	        photos = (data.photos === undefined ? data.photoset : data.photos);
+	        elements.html($.flickr.thumbnail.process(photos));
+	
+					if(pagination !== undefined){
+						pagination.page.html(photos.page);
+						pagination.pages.text(photos.pages);
+					}
+					
+				}
+      });
+    });
   }
 
-  $.flickr.photosets = function(method, options) {
-    var options = $.extend($.flickr.settings, options || {}),
-        elements = $.flickr.self, photos
-
-    return elements.each(function() {
-      $.getJSON($.flickr.url(method, options), function(data) {
-        elements.append($.flickr.thumbnail.process(data.photosets))
-      })
-    })
-  }
+  $.flickr.photosets = function(options,callback) {
+    var options  = $.extend($.flickr.settings, options || {});
+		$.getJSON($.flickr.url('flickr.photosets.getList', options), function(data) {
+			$.map(data.photosets.photoset, function(photoset) {
+				$.flickr.self.append("<option value="+photoset.id+">"+photoset.title._content+"</option>");
+			});
+			callback.call();
+		});
+  };
 
   // namespace to hold available API methods
   // note: options available to each method match that of Flickr's docs
@@ -119,12 +120,12 @@
       $.flickr.photos('flickr.photos.search', options)
     },
     // http://www.flickr.com/services/api/flickr.photosets.getPhotos.html
-    photosetsGetPhotos: function(options) {
-      $.flickr.photos('flickr.photosets.getPhotos', options)
+    photosetsGetPhotos: function(options,pagination) {
+      $.flickr.photos('flickr.photosets.getPhotos', options, pagination)
     },
     // http://www.flickr.com/services/api/flickr.photosets.getList.html
-    photosetsGetList: function(options) {
-      $.flickr.photosets('flickr.photosets.getList', options)
+    photosetsGetList: function(options,callback) {
+      $.flickr.photosets(options,callback);
     },
     // http://www.flickr.com/services/api/flickr.people.getPublicPhotos.html
     peopleGetPublicPhotos: function(options) {
